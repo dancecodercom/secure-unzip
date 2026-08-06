@@ -60,12 +60,12 @@ func (c *config) resolved() []param {
 		maxMode = fmt.Sprintf("%04o", c.maxMode.Perm())
 	}
 	return []param{
-		{"-max-size", limitValue(c.maxSize, security.HumanBytes(c.maxSize)), c.origin("max-size")},
-		{"-max-files", limitValue(c.maxFiles, strconv.FormatInt(c.maxFiles, 10)), c.origin("max-files")},
-		{"-max-ratio", limitValue(c.maxRatio, fmt.Sprintf("%d:1", c.maxRatio)), c.origin("max-ratio")},
-		{"-max-mode", maxMode, c.origin("max-mode")},
-		{"-read-only", yesNo(c.readOnly), c.origin("read-only")},
-		{"-cpu-limit", "0 (reserved, not implemented)", c.origin("cpu-limit")},
+		{"--max-size", limitValue(c.maxSize, security.HumanBytes(c.maxSize)), c.origin("max-size")},
+		{"--max-files", limitValue(c.maxFiles, strconv.FormatInt(c.maxFiles, 10)), c.origin("max-files")},
+		{"--max-ratio", limitValue(c.maxRatio, fmt.Sprintf("%d:1", c.maxRatio)), c.origin("max-ratio")},
+		{"--max-mode", maxMode, c.origin("max-mode")},
+		{"--read-only", yesNo(c.readOnly), c.origin("read-only")},
+		{"--cpu-limit", "0 (reserved, not implemented)", c.origin("cpu-limit")},
 	}
 }
 
@@ -105,7 +105,7 @@ func parseArgs(args []string, out io.Writer) (*config, string, error) {
 		readOnly  = fs_.Bool("read-only", false, "strip write permissions after extraction")
 		cpuLimit  = fs_.Int("cpu-limit", 0, "reserved; CPU throttling is not yet implemented")
 		verbose   = fs_.Bool("verbose", false, "report resolved parameters and run statistics")
-		verboseV  = fs_.Bool("v", false, "alias for -verbose")
+		verboseV  = fs_.Bool("v", false, "alias for --verbose")
 		quiet     = fs_.Bool("q", false, "suppress per-entry output")
 		overwrite = fs_.Bool("o", false, "overwrite existing files without prompting")
 		showVer   = fs_.Bool("version", false, "print version and exit")
@@ -268,12 +268,14 @@ func exitCodeFor(err error) int {
 // worth avoiding: the switch disables path containment, not merely the
 // resource ceilings.
 func warnInsecure(w io.Writer, cfg *config) {
-	fmt.Fprintln(w, "secure-unzip: WARNING --secure=no — safety checks are disabled:")
-	fmt.Fprintln(w, "  * zip-slip path containment is NOT enforced")
-	fmt.Fprintln(w, "  * symlink targets are NOT checked")
+	s := newStyler(w)
+	fmt.Fprintf(w, "%s %s — safety checks are disabled:\n",
+		s.red("secure-unzip: WARNING"), s.bold("--secure=no"))
+	fmt.Fprintf(w, "  %s zip-slip path containment is %s enforced\n", s.red("*"), s.bold("NOT"))
+	fmt.Fprintf(w, "  %s symlink targets are %s checked\n", s.red("*"), s.bold("NOT"))
 	for _, p := range cfg.resolved() {
 		if p.value == "unlimited" || p.value == "off" {
-			fmt.Fprintf(w, "  * %s is %s\n", p.name, p.value)
+			fmt.Fprintf(w, "  %s %s is %s\n", s.red("*"), s.cyan(p.name), s.bold(p.value))
 		}
 	}
 }
@@ -295,7 +297,7 @@ func parseMode(s string) (fs.FileMode, error) {
 	}
 	n, err := strconv.ParseUint(trimOctalPrefix(s), 8, 32)
 	if err != nil {
-		return 0, fmt.Errorf("invalid -max-mode %q: want an octal mode such as 0755", s)
+		return 0, fmt.Errorf("invalid --max-mode %q: want an octal mode such as 0755", s)
 	}
 	return fs.FileMode(n).Perm(), nil
 }
@@ -324,22 +326,66 @@ func lastOf(args []string, names ...string) string {
 	return found
 }
 
+// dashed renders a flag name in the project's convention: single-letter
+// options take one dash (-q), multi-letter options take two (--max-size).
+// Go's flag package accepts either spelling for either kind, so this governs
+// what we print and document, not what we parse.
+func dashed(name string) string {
+	if len(name) == 1 {
+		return "-" + name
+	}
+	return "--" + name
+}
+
 func usage(w io.Writer, fs_ *flag.FlagSet) {
-	fmt.Fprintf(w, `secure-unzip %s — a security-hardened alternative to unzip
+	s := newStyler(w)
 
-Usage:
-  secure-unzip [options] archive.zip [-d extract_dir]
+	fmt.Fprintf(w, "%s %s — a security-hardened alternative to unzip\n\n",
+		s.bold("secure-unzip"), s.dim(version))
 
-Safety is on by default (--secure=yes): archives are checked for path
-traversal, expansion attacks, inode exhaustion and unsafe permissions.
-Use --secure=no to disable every check, or override individual limits.
+	fmt.Fprintf(w, "%s\n  secure-unzip [options] archive.zip [-d extract_dir]\n\n", s.bold("Usage:"))
 
-Exit codes:
-  0  success                 2  error (bad archive, I/O)
-  1  completed with warnings 3  SECURITY: a constraint was violated
-  9  archive not found
+	fmt.Fprintf(w, "Safety is on by default (%s): archives are checked for path\n",
+		s.green("--secure=yes"))
+	fmt.Fprintf(w, "traversal, expansion attacks, inode exhaustion and unsafe permissions.\n")
+	fmt.Fprintf(w, "Use %s to disable every check, or override individual limits.\n\n",
+		s.red("--secure=no"))
 
-Options:
-`, version)
-	fs_.PrintDefaults()
+	fmt.Fprintf(w, "%s\n", s.bold("Exit codes:"))
+	fmt.Fprintf(w, "  0  success                 2  error (bad archive, I/O)\n")
+	fmt.Fprintf(w, "  1  completed with warnings %s  %s\n",
+		s.red("3"), s.red("SECURITY: a constraint was violated"))
+	fmt.Fprintf(w, "  9  archive not found\n\n")
+
+	fmt.Fprintf(w, "%s\n", s.bold("Options:"))
+	printDefaults(w, fs_)
+}
+
+// printDefaults replaces flag.PrintDefaults so option names follow the
+// one-dash/two-dash convention and each flag occupies a single line.
+func printDefaults(w io.Writer, fs_ *flag.FlagSet) {
+	type row struct{ name, desc string }
+	var rows []row
+	width := 0
+
+	s := newStyler(w)
+
+	fs_.VisitAll(func(f *flag.Flag) {
+		name := dashed(f.Name)
+		if kind, _ := flag.UnquoteUsage(f); kind != "" {
+			name += " " + kind
+		}
+		desc := f.Usage
+		if f.DefValue != "" && f.DefValue != "false" && f.DefValue != "0" {
+			desc += s.dim(fmt.Sprintf(" (default %s)", f.DefValue))
+		}
+		if len(name) > width {
+			width = len(name)
+		}
+		rows = append(rows, row{s.cyan(name), desc})
+	})
+
+	for _, r := range rows {
+		fmt.Fprintf(w, "  %s  %s\n", s.pad(r.name, width), r.desc)
+	}
 }
