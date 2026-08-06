@@ -2,6 +2,10 @@
 
 ## 2026-08-06
 
+* **Update**: [Performance Benchmarking](testing/performance-benchmarking.md) and
+  [Module Layout](architecture/module-layout.md) — the harness is
+  `benchmark/performance/benchmark.sh` over a nine-archive corpus; the earlier
+  `scripts/benchmark.sh`, `cmd/genfixtures/` and `testdata/` were retired.
 * **Creation**: [Verbose Output](cli/verbose-output.md) — `--verbose` reports resolved parameter
   values, peak memory, CPU, file count and MB/s to stderr; records the `Maxrss` unit and
   Windows/`getrusage` traps.

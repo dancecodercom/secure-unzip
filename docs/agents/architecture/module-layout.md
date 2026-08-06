@@ -35,12 +35,12 @@ timestamp: 2026-08-06T00:00:00Z
 | `LICENSE`                             | exists      | MIT text, required by `CLAUDE.md` §5 — see the decision record    |
 | `CLAUDE.md`                           | exists      | Product specification; the source of every claim in this bundle   |
 | `docs/benchmark/security_report.md`   | generated   | Written by `security_test.go` (`make report`)                     |
-| `docs/benchmark/performance_report.md`| generated   | Written by `scripts/benchmark.sh` (`make bench`)                  |
+| `docs/benchmark/performance_report.md`| generated   | Written by `benchmark/performance/benchmark.sh` (`make bench`)    |
 | `bin/`                                | build output| macOS, Linux and Windows binaries; gitignored                     |
-| `.gitignore`                          | exists      | Excludes `bin/`, `.idea/`, `testdata/tmp/`, `*.zip`               |
+| `.gitignore`                          | exists      | Excludes `bin/`, `.idea/`, `*.zip`, benchmark example corpora     |
 | `Makefile`                            | exists      | `build` (5 targets), `build-host`, `test`, `lint`, `bench`, `report` |
-| `cmd/genfixtures/`                    | exists      | CLI wrapper so the bash benchmark can generate the Go fixtures    |
-| `scripts/benchmark.sh`                | exists      | hyperfine + GNU time harness                                      |
+| `benchmark/performance/`              | exists      | `benchmark.sh` harness + `generate_examples.py` corpus generator  |
+| `benchmark/security/`                 | exists      | `generate_examples.py`: on-disk malicious corpus for manual runs  |
 | `.github/workflows/`                  | exists      | `ci.yml` (test on 3 OSes), `release.yml` (assets on tag)          |
 
 

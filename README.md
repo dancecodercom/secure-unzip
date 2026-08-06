@@ -59,6 +59,7 @@ secure-unzip --secure=no -max-files 1000000 archive.zip
 make test          # go test ./...
 make build-host    # bin/secure-unzip for this machine
 make build         # all 5 release targets into bin/ (gitignored)
+make fixtures      # regenerate the benchmark/*/examples corpora (needs python3)
 make report        # regenerate docs/benchmark/security_report.md
 make bench         # regenerate docs/benchmark/performance_report.md (needs hyperfine)
 ```
