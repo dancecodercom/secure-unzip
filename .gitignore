@@ -5,7 +5,6 @@ bin/
 .idea/
 
 # Generated test fixtures and scratch dirs
-testdata/tmp/
 *.zip
 
 # Generated example archives — regenerate with the generate_examples.py in each folder

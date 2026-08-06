@@ -95,38 +95,6 @@ func Benign(path string) error {
 	})
 }
 
-// LargeBenign writes a well-formed archive of roughly totalBytes uncompressed,
-// spread over many files. This is the benchmark input: big enough to measure,
-// realistic enough that the compression ratio stays sane.
-func LargeBenign(path string, totalBytes int64) error {
-	const fileSize = 256 << 10 // 256 KiB per file
-	count := int(totalBytes / fileSize)
-	if count < 1 {
-		count = 1
-	}
-
-	// Pseudo-random but deterministic content: incompressible enough to be a
-	// fair I/O test, unlike a run of zeros.
-	blob := make([]byte, fileSize)
-	seed := uint32(2463534242)
-	for i := range blob {
-		seed ^= seed << 13
-		seed ^= seed >> 17
-		seed ^= seed << 5
-		blob[i] = byte(seed)
-	}
-
-	return createZip(path, func(zw *zip.Writer) error {
-		for i := 0; i < count; i++ {
-			name := fmt.Sprintf("data/%03d/file-%05d.bin", i/100, i)
-			if err := addFile(zw, name, 0o644, blob); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-}
-
 // ZipSlip carries an entry whose name escapes the destination directory.
 func ZipSlip(path string) error {
 	return createZip(path, func(zw *zip.Writer) error {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"strconv"
@@ -79,10 +80,20 @@ func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
 
-func run(args []string, stdout, stderr *os.File) int {
+// errVersion and errUsage are control-flow sentinels from parseArgs, not
+// failures the user needs an error message for.
+var (
+	errVersion = errors.New("version requested")
+	errUsage   = errors.New("usage requested")
+)
+
+// parseArgs turns argv into a resolved config. It is separate from run so the
+// resolution rule — profile first, explicit flags second — can be tested
+// without touching the filesystem.
+func parseArgs(args []string, out io.Writer) (*config, string, error) {
 	fs_ := flag.NewFlagSet("secure-unzip", flag.ContinueOnError)
-	fs_.SetOutput(stderr)
-	fs_.Usage = func() { usage(stderr, fs_) }
+	fs_.SetOutput(out)
+	fs_.Usage = func() { usage(out, fs_) }
 
 	var (
 		secure    = fs_.String("secure", "yes", "enable the precaution profile (yes|no)")
@@ -101,23 +112,37 @@ func run(args []string, stdout, stderr *os.File) int {
 	)
 	_ = cpuLimit // parsed and documented, deliberately inert (v2)
 
-	if err := fs_.Parse(args); err != nil {
-		return exitError
+	// unzip's documented form puts -d AFTER the archive
+	// (`secure-unzip [options] archive.zip [-d extract_dir]`), but flag.Parse
+	// stops at the first non-flag argument. Parse repeatedly, peeling off one
+	// operand each round, so flags on either side of the archive are seen.
+	var operands []string
+	rest := args
+	for {
+		if err := fs_.Parse(rest); err != nil {
+			return nil, "", err
+		}
+		if fs_.NArg() == 0 {
+			break
+		}
+		operands = append(operands, fs_.Arg(0))
+		rest = fs_.Args()[1:]
 	}
 	if *showVer {
-		fmt.Fprintf(stdout, "secure-unzip %s\n", version)
-		return exitOK
+		return nil, "", errVersion
 	}
-	if fs_.NArg() < 1 {
-		usage(stderr, fs_)
-		return exitError
+	if len(operands) < 1 {
+		usage(out, fs_)
+		return nil, "", errUsage
 	}
-	archive := fs_.Arg(0)
+	archive := operands[0]
+	if len(operands) > 1 {
+		return nil, "", fmt.Errorf("unexpected argument %q: selecting individual members is not supported", operands[1])
+	}
 
 	secureOn, err := parseYesNo(*secure)
 	if err != nil {
-		fmt.Fprintf(stderr, "secure-unzip: %v\n", err)
-		return exitError
+		return nil, "", err
 	}
 
 	explicit := map[string]bool{}
@@ -125,8 +150,7 @@ func run(args []string, stdout, stderr *os.File) int {
 
 	maxMode, err := parseMode(*maxModeS)
 	if err != nil {
-		fmt.Fprintf(stderr, "secure-unzip: %v\n", err)
-		return exitError
+		return nil, "", err
 	}
 
 	cfg := &config{
@@ -166,8 +190,23 @@ func run(args []string, stdout, stderr *os.File) int {
 		cfg.quiet = lastOf(args, "q", "v", "verbose") == "q"
 		cfg.verbose = !cfg.quiet
 	}
+	return cfg, archive, nil
+}
 
-	if !secureOn && !cfg.quiet {
+func run(args []string, stdout, stderr *os.File) int {
+	cfg, archive, err := parseArgs(args, stderr)
+	switch {
+	case errors.Is(err, errVersion):
+		fmt.Fprintf(stdout, "secure-unzip %s\n", version)
+		return exitOK
+	case errors.Is(err, errUsage):
+		return exitError
+	case err != nil:
+		fmt.Fprintf(stderr, "secure-unzip: %v\n", err)
+		return exitError
+	}
+
+	if !cfg.secure && !cfg.quiet {
 		warnInsecure(stderr, cfg)
 	}
 	if cfg.verbose {
@@ -228,7 +267,7 @@ func exitCodeFor(err error) int {
 // warnInsecure makes --secure=no loud. Silently unsafe is the failure mode
 // worth avoiding: the switch disables path containment, not merely the
 // resource ceilings.
-func warnInsecure(w *os.File, cfg *config) {
+func warnInsecure(w io.Writer, cfg *config) {
 	fmt.Fprintln(w, "secure-unzip: WARNING --secure=no — safety checks are disabled:")
 	fmt.Fprintln(w, "  * zip-slip path containment is NOT enforced")
 	fmt.Fprintln(w, "  * symlink targets are NOT checked")
@@ -285,7 +324,7 @@ func lastOf(args []string, names ...string) string {
 	return found
 }
 
-func usage(w *os.File, fs_ *flag.FlagSet) {
+func usage(w io.Writer, fs_ *flag.FlagSet) {
 	fmt.Fprintf(w, `secure-unzip %s — a security-hardened alternative to unzip
 
 Usage:

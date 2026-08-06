@@ -35,8 +35,15 @@ lint:
 report:
 	go test -run TestSecurityReport -v .
 
+# Regenerates the example archives both benchmark harnesses run against.
+fixtures:
+	python3 benchmark/security/generate_examples.py
+	python3 benchmark/performance/generate_examples.py
+
+# Regenerates docs/benchmark/performance_report.md over the whole corpus.
+# Run 'make fixtures' first if benchmark/performance/examples/ is empty.
 bench: build-host
-	bash scripts/benchmark.sh
+	bash benchmark/performance/benchmark.sh
 
 clean:
-	rm -rf bin testdata/tmp
+	rm -rf bin

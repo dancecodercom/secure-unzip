@@ -8,17 +8,18 @@ timestamp: 2026-08-06T00:00:00Z
 
 # Performance Benchmarking
 
-**Status: planned** — no benchmark script exists as of 2026-08-06. Source: `CLAUDE.md` §4.
+**Status: implemented** (2026-08-06). Harness in `scripts/benchmark.sh`, run via `make bench`.
+Source: `CLAUDE.md` §4.
 
 An **external** script (Bash or PHP), not a Go benchmark — see
 [the decision record](../decisions/2026-08-06-hyperfine-for-benchmarks.md).
 
 ## Tools and invocations
 
-| Tool             | Invocation                                    | Captures                                                     |
-|------------------|-----------------------------------------------|--------------------------------------------------------------|
-| `hyperfine`      | `hyperfine --warmup 3 --export-markdown <out>` | execution duration, mean, standard deviation, speed ratios   |
-| `/usr/bin/time`  | `/usr/bin/time -v`                             | Peak Resident Set Size (Max RSS), CPU usage percentage       |
+| Tool            | Invocation                                     | Captures                                                   |
+|-----------------|------------------------------------------------|------------------------------------------------------------|
+| `hyperfine`     | `hyperfine --warmup 3 --export-markdown <out>` | execution duration, mean, standard deviation, speed ratios |
+| `/usr/bin/time` | `/usr/bin/time -v`                             | Peak Resident Set Size (Max RSS), CPU usage percentage     |
 
 Both are run side-by-side against standard `unzip` on the same archives.
 

@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # make git describe see the tag
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Test
+        run: go test ./...
+
+      - name: Cross-compile
+        run: make build
+
+      - name: Checksums
+        working-directory: bin
+        run: sha256sum * > SHA256SUMS
+
+      # bin/ is gitignored — these binaries exist only as release assets.
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: bin/*
+          generate_release_notes: true

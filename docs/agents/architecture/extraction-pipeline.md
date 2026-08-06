@@ -8,8 +8,8 @@ timestamp: 2026-08-06T00:00:00Z
 
 # Extraction Pipeline
 
-**Status: planned** (no code as of 2026-08-06). Order matters: several controls are only sound in
-this sequence.
+**Status: implemented** (2026-08-06) in `extractor/extract.go`. Order matters: several controls are
+only sound in this sequence.
 
 ## Per-archive
 

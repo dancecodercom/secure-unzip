@@ -51,6 +51,12 @@ type Result struct {
 	// created, so -read-only locks only those and leaves any pre-existing
 	// directories in the destination alone.
 	createdDirs []string
+
+	// dirTimes maps the archive-relative path of each directory entry to its
+	// stored modification time. Directory mtimes can only be restored once
+	// nothing further will be written inside them, so they are applied in a
+	// final pass rather than at creation.
+	dirTimes map[string]time.Time
 }
 
 // Extract unpacks archivePath into opts.Dest.
@@ -120,6 +126,12 @@ func Extract(archivePath string, opts Options) (*Result, error) {
 		os.RemoveAll(stage)
 	}
 
+	// Directory mtimes go on after the commit: creating an entry inside a
+	// directory bumps its mtime, and so does the rename that moves it into
+	// place, so anything set earlier would be overwritten. Deepest first, since
+	// touching a child rewrites the parent.
+	res.restoreDirTimes(dest)
+
 	// Directories are locked last of all, and only after the commit: a
 	// directory cannot be written into while read-only, and on POSIX it cannot
 	// even be renamed, since the move rewrites its ".." entry.
@@ -156,7 +168,14 @@ func extractEntry(f *zip.File, root string, budget *security.Budget, opts *Optio
 		if err := os.MkdirAll(target, mode.Perm()); err != nil {
 			return fmt.Errorf("cannot create directory %s: %w", f.Name, err)
 		}
-		res.createdDirs = append(res.createdDirs, filepath.Clean(filepath.FromSlash(f.Name)))
+		rel := filepath.Clean(filepath.FromSlash(f.Name))
+		res.createdDirs = append(res.createdDirs, rel)
+		if mt := entryModTime(f); !mt.IsZero() {
+			if res.dirTimes == nil {
+				res.dirTimes = map[string]time.Time{}
+			}
+			res.dirTimes[rel] = mt
+		}
 		return nil
 	}
 	if err := budget.AddFile(f.Name); err != nil {
@@ -211,6 +230,16 @@ func extractEntry(f *zip.File, root string, budget *security.Budget, opts *Optio
 	budget.AddCompressed(int64(f.CompressedSize64))
 	if err := budget.CheckRatio(f.Name, written, int64(f.CompressedSize64)); err != nil {
 		return err
+	}
+
+	// Restore the stored modification time, after the last write to the file
+	// and before any read-only lock. Failure here is cosmetic — the data is
+	// already correct — so it degrades to a warning rather than an abort.
+	if mt := entryModTime(f); !mt.IsZero() {
+		if err := os.Chtimes(target, mt, mt); err != nil {
+			res.Warnings = append(res.Warnings,
+				fmt.Sprintf("could not restore modification time of %s: %v", f.Name, err))
+		}
 	}
 
 	// Step 9: the read-only lock, strictly after the data is written.
@@ -279,6 +308,52 @@ func (r *Result) recordAncestors(entryName string) {
 	for dir != "." && dir != string(filepath.Separator) {
 		r.createdDirs = append(r.createdDirs, dir)
 		dir = filepath.Dir(dir)
+	}
+}
+
+// entryModTime returns the entry's modification time as an absolute instant.
+//
+// Legacy MS-DOS timestamps carry no timezone: they are naive local time, and
+// standard unzip reads them as such. Go's zip reader parks those in UTC and
+// documents Modified.Location() == time.UTC as the marker for "no extended
+// timestamp present" (archive/zip/reader.go). So for DOS-only entries the wall
+// clock is reinterpreted in the local zone, or every file lands offset by the
+// local UTC offset. Entries with an extended timestamp already carry a real
+// instant and are used as-is.
+func entryModTime(f *zip.File) time.Time {
+	mt := f.Modified
+	if mt.IsZero() || mt.Location() != time.UTC {
+		return mt
+	}
+	return time.Date(mt.Year(), mt.Month(), mt.Day(),
+		mt.Hour(), mt.Minute(), mt.Second(), mt.Nanosecond(), time.Local)
+}
+
+// restoreDirTimes applies the archive's stored directory mtimes under dest,
+// deepest path first so that a parent is never re-touched after being set.
+// Only directories that had an explicit archive entry are adjusted; ones
+// implied by a file path have no recorded time and keep the filesystem's.
+func (r *Result) restoreDirTimes(dest string) {
+	if len(r.dirTimes) == 0 {
+		return
+	}
+	paths := make([]string, 0, len(r.dirTimes))
+	for p := range r.dirTimes {
+		paths = append(paths, p)
+	}
+	sort.Slice(paths, func(i, j int) bool {
+		di, dj := strings.Count(paths[i], string(filepath.Separator)), strings.Count(paths[j], string(filepath.Separator))
+		if di != dj {
+			return di > dj
+		}
+		return paths[i] > paths[j]
+	})
+	for _, p := range paths {
+		mt := r.dirTimes[p]
+		if err := os.Chtimes(filepath.Join(dest, p), mt, mt); err != nil {
+			r.Warnings = append(r.Warnings,
+				fmt.Sprintf("could not restore modification time of %s: %v", p, err))
+		}
 	}
 }
 

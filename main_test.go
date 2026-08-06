@@ -1,9 +1,57 @@
 package main
 
 import (
+	"io"
 	"io/fs"
 	"testing"
+
+	"github.com/pforret/secure-unzip/security"
 )
+
+// resolveForTest runs the flag resolution with a dummy archive argument.
+func resolveForTest(t *testing.T, args []string) *config {
+	t.Helper()
+	cfg, _, err := parseArgs(append(append([]string{}, args...), "archive.zip"), io.Discard)
+	if err != nil {
+		t.Fatalf("parseArgs(%v): %v", args, err)
+	}
+	return cfg
+}
+
+// The usage line advertises `secure-unzip [options] archive.zip [-d dir]`, but
+// flag.Parse stops at the first non-flag argument. Before the repeated-parse
+// fix, a trailing -d was silently dropped and extraction went to the current
+// directory — the destination was ignored without any error.
+func TestFlagsAreAcceptedOnEitherSideOfTheArchive(t *testing.T) {
+	cases := map[string][]string{
+		"before":   {"-q", "-d", "/tmp/dest", "archive.zip"},
+		"after":    {"-q", "archive.zip", "-d", "/tmp/dest"},
+		"straddle": {"-q", "archive.zip", "-o", "-d", "/tmp/dest"},
+	}
+	for name, args := range cases {
+		t.Run(name, func(t *testing.T) {
+			cfg, archive, err := parseArgs(args, io.Discard)
+			if err != nil {
+				t.Fatalf("parseArgs(%v): %v", args, err)
+			}
+			if archive != "archive.zip" {
+				t.Errorf("archive = %q, want archive.zip", archive)
+			}
+			if cfg.dest != "/tmp/dest" {
+				t.Errorf("dest = %q, want /tmp/dest", cfg.dest)
+			}
+		})
+	}
+}
+
+// Member selection (`unzip archive.zip some/file`) is not implemented. Ignoring
+// the extra operand would extract everything while the user asked for one file.
+func TestExtraOperandIsRejected(t *testing.T) {
+	_, _, err := parseArgs([]string{"archive.zip", "wanted/file.txt"}, io.Discard)
+	if err == nil {
+		t.Fatal("parseArgs accepted a member-selection argument, want error")
+	}
+}
 
 func TestParseMode(t *testing.T) {
 	ok := map[string]fs.FileMode{
@@ -114,9 +162,32 @@ func TestLastOfResolvesQuietVerboseConflict(t *testing.T) {
 	}
 }
 
-func TestExitCodeForConstraint(t *testing.T) {
-	err := (&stubConstraint{}).err()
-	if got := exitCodeFor(err); got != exitSecurity {
+func TestExitCodeFor(t *testing.T) {
+	constraint := &security.ConstraintError{
+		Constraint: security.ConstraintZipSlip,
+		Entry:      "../../etc/passwd",
+		Detail:     "traversal",
+	}
+	if got := exitCodeFor(constraint); got != exitSecurity {
 		t.Errorf("exitCodeFor(constraint) = %d, want %d", got, exitSecurity)
+	}
+
+	if got := exitCodeFor(fs.ErrNotExist); got != exitNoSuchFile {
+		t.Errorf("exitCodeFor(not-exist) = %d, want %d", got, exitNoSuchFile)
+	}
+
+	if got := exitCodeFor(io.ErrUnexpectedEOF); got != exitError {
+		t.Errorf("exitCodeFor(other) = %d, want %d", got, exitError)
+	}
+}
+
+// --secure=no must not silently keep enforcing containment: the CLI warns that
+// it is off, so the option passed to the extractor has to match the warning.
+func TestUnsecureDisablesContainment(t *testing.T) {
+	if cfg := resolveForTest(t, []string{"--secure=no"}); cfg.secure {
+		t.Fatal("--secure=no must resolve to secure=false, which sets AllowUnsafePaths")
+	}
+	if cfg := resolveForTest(t, nil); !cfg.secure {
+		t.Fatal("the default must resolve to secure=true")
 	}
 }

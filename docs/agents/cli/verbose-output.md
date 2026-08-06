@@ -8,7 +8,8 @@ timestamp: 2026-08-06T00:00:00Z
 
 # Verbose Output
 
-**Status: planned** — no code exists as of 2026-08-06.
+**Status: implemented** (2026-08-06). Output formatting in `stats.go`; resource sampling in
+`rusage_unix.go` and `rusage_windows.go`.
 
 `--verbose` (`-v`) makes the run self-reporting: every effective parameter before extraction, and
 resource plus throughput figures after. It changes no behaviour, only output.

@@ -8,7 +8,8 @@ timestamp: 2026-08-06T00:00:00Z
 
 # Command Line Interface
 
-**Status: planned** — no flag-parsing code exists as of 2026-08-06. Source: `CLAUDE.md` §1.
+**Status: implemented** (2026-08-06). Flag parsing lives in `main.go`; the resolution rule is
+tested in `main_test.go`. Source: `CLAUDE.md` §1.
 
 ## Syntax
 

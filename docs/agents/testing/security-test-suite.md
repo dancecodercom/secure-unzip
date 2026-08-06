@@ -8,7 +8,8 @@ timestamp: 2026-08-06T00:00:00Z
 
 # Security Test Suite
 
-**Status: planned** — no `_test.go` files exist as of 2026-08-06. Source: `CLAUDE.md` §3.
+**Status: implemented** (2026-08-06). Suite in `security_test.go`, generators in
+`testutils/fixtures.go`. Source: `CLAUDE.md` §3.
 
 Go tests (`_test.go`) plus a fixture generator living in `testutils/`.
 

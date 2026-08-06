@@ -1,10 +1,13 @@
 package extractor
 
 import (
+	"archive/zip"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/pforret/secure-unzip/security"
 	"github.com/pforret/secure-unzip/testutils"
@@ -56,6 +59,78 @@ func TestExtractBenign(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dest, "src", "lib", "util.go")); err != nil {
 		t.Errorf("nested file missing: %v", err)
+	}
+}
+
+// Timestamps must survive extraction, including on directory entries — those
+// are written last, because creating files inside a directory and renaming it
+// out of staging both bump its mtime.
+func TestModificationTimesAreRestored(t *testing.T) {
+	stamp := time.Date(2019, 3, 14, 9, 26, 54, 0, time.Local)
+
+	path := filepath.Join(t.TempDir(), "stamped.zip")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zw := zip.NewWriter(f)
+	for _, name := range []string{"dir/", "dir/file.txt"} {
+		hdr := &zip.FileHeader{Name: name, Method: zip.Deflate, Modified: stamp}
+		if strings.HasSuffix(name, "/") {
+			hdr.SetMode(fs.ModeDir | 0o755)
+		} else {
+			hdr.SetMode(0o644)
+		}
+		w, err := zw.CreateHeader(hdr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.HasSuffix(name, "/") {
+			if _, err := w.Write([]byte("contents\n")); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+
+	dest := filepath.Join(t.TempDir(), "out")
+	if _, err := Extract(path, secureOpts(dest)); err != nil {
+		t.Fatalf("extract: %v", err)
+	}
+
+	for _, name := range []string{"dir", filepath.Join("dir", "file.txt")} {
+		info, err := os.Stat(filepath.Join(dest, name))
+		if err != nil {
+			t.Fatalf("stat %s: %v", name, err)
+		}
+		// MS-DOS timestamps have 2-second granularity.
+		if delta := info.ModTime().Sub(stamp); delta > 2*time.Second || delta < -2*time.Second {
+			t.Errorf("%s mtime = %v, want %v (delta %v)", name, info.ModTime(), stamp, delta)
+		}
+	}
+}
+
+// Go's zip reader parks DOS-only timestamps in UTC and documents that location
+// as the marker for "no extended timestamp". Those are naive local times, so
+// reading them as UTC shifts every file by the local UTC offset.
+func TestEntryModTimeReinterpretsDosTimestampsAsLocal(t *testing.T) {
+	dosOnly := &zip.File{FileHeader: zip.FileHeader{
+		Modified: time.Date(2019, 3, 14, 9, 26, 54, 0, time.UTC),
+	}}
+	got := entryModTime(dosOnly)
+	want := time.Date(2019, 3, 14, 9, 26, 54, 0, time.Local)
+	if !got.Equal(want) {
+		t.Errorf("DOS-only mtime = %v, want %v", got, want)
+	}
+
+	// An entry carrying an extended timestamp is already an absolute instant.
+	zone := time.FixedZone("test", 5*3600)
+	exact := time.Date(2019, 3, 14, 9, 26, 54, 0, zone)
+	if got := entryModTime(&zip.File{FileHeader: zip.FileHeader{Modified: exact}}); !got.Equal(exact) {
+		t.Errorf("extended mtime = %v, want %v unchanged", got, exact)
 	}
 }
 
