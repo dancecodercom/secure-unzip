@@ -12,11 +12,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0   # make git describe see the tag
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23'
+
+      # setver bumps VERSION.md and tags in one step, so the two must agree. If
+      # they drift, the assets would be named for one version and released under
+      # another — fail here rather than publish a mislabelled release.
+      - name: Check tag matches VERSION.md
+        run: |
+          file="v$(tr -d '[:space:]' < VERSION.md)"
+          tag="${GITHUB_REF_NAME}"
+          echo "VERSION.md=$file  tag=$tag"
+          [ "$file" = "$tag" ] || {
+            echo "::error::VERSION.md says $file but the tag is $tag — bump with 'setver' so both move together"
+            exit 1
+          }
 
       - name: Test
         run: go test ./...
