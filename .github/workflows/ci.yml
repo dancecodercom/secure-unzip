@@ -20,6 +20,10 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23'
+          # The module has no third-party dependencies, so there is no go.sum
+          # and nothing to cache. Left on, setup-go warns "Restore cache failed"
+          # on every run for a cache that could never hold anything.
+          cache: false
       - name: Vet
         run: go vet ./...
       - name: Test
@@ -33,6 +37,10 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23'
+          # The module has no third-party dependencies, so there is no go.sum
+          # and nothing to cache. Left on, setup-go warns "Restore cache failed"
+          # on every run for a cache that could never hold anything.
+          cache: false
       - name: Cross-compile all release targets
         run: make build
       - uses: actions/upload-artifact@v4

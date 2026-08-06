@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -188,6 +189,13 @@ func TestInodeExhaustionIsBlocked(t *testing.T) {
 }
 
 func TestPermissionsAreMasked(t *testing.T) {
+	// Go reports every writable file as 0666 on Windows — there are no group or
+	// other bits and no exec bit to mask, so the assertion below cannot hold
+	// there. security_test.go skips its equivalent for the same reason.
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX permission bits are not representable on Windows")
+	}
+
 	archive := fixture(t, testutils.OverlyPermissive, "perms")
 	dest := filepath.Join(t.TempDir(), "out")
 
