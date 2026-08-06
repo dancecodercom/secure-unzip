@@ -8,12 +8,14 @@ Develop a cross-platform command-line utility in Go named secure-unzip under the
 ### 1. Command-Line Interface (CLI) & Syntax
 
 * Compatibility: Mimic the core syntax and flags of standard unzip (e.g., secure-unzip [options] archive.zip [-d extract_dir]).
+* Master switch: --secure[=yes|no] (default: yes). Applies the whole precaution profile; --secure=no clears it and behaves approximately like standard unzip. Explicitly specified limits always override the profile in either mode (e.g. --secure=no --max-files=1000000).
 * Resource Constraint Flags:
-    * -max-size <bytes>: Absolute limit on total uncompressed output size (default: the size that was returned by ).
+    * -max-size <bytes>: Absolute limit on total uncompressed output size (default: 10 GiB / 10737418240).
     * -max-files <count>: Limit on the maximum number of extracted files/directories to prevent inode exhaustion (default: 10,000).
     * -cpu-limit <percent>: Throttle extraction execution to stay under a specific CPU usage threshold.
     * -max-mode <octal>: Set a permission ceiling mask for extracted files (e.g., 0644).
     * -read-only: Post-extraction flag to enforce read-only permissions on all extracted files after writing.
+* Reporting: --verbose (-v) prints, to stderr, the resolved value of every parameter before extraction, and after it the number of files generated, peak memory, CPU usage and throughput in MB/s. Statistics are printed even when the run aborts.
 
 ### 2. Security & Hardening Features
 * Zip Slip Prevention: Validate every canonical target path before writing. Abort if any file attempts directory traversal outside the specified destination directory.

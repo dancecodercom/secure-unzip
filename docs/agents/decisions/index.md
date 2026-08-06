@@ -8,6 +8,7 @@ repository has no git history (zero commits) and no ADR archive. They record cho
 makes without stating its reasoning; the *Motivation* sections are reconstructed rationale, not
 quoted from the author.
 
+* [A --secure master switch, on by default](2026-08-06-secure-master-switch.md) - one flag for the whole precaution profile; explicit limits always win
 * [Cross-platform binaries in an untracked bin/](2026-08-06-cross-platform-binaries-in-bin.md) - build all three platforms every time, ship them as release assets
 * [Fail closed on constraint breach](2026-08-06-fail-closed-on-breach.md) - abort rather than skip-and-continue
 * [Write-then-lock for read-only extraction](2026-08-06-write-then-lock-readonly.md) - ordering that makes `-read-only` work

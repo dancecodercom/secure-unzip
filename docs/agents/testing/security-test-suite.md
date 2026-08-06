@@ -14,12 +14,12 @@ Go tests (`_test.go`) plus a fixture generator living in `testutils/`.
 
 ## Fixtures
 
-| Fixture             | Payload                                          | secure-unzip must                                  | system `unzip` expected to |
-|---------------------|--------------------------------------------------|----------------------------------------------------|----------------------------|
-| Zip Slip            | entry named `../../etc/passwd`                    | abort, naming the traversal constraint             | write outside the dest dir |
-| Zip Bomb            | highly compressed zero-filled files               | abort on `-max-size` or ratio breach               | expand unbounded           |
-| Inode exhaustion    | thousands of tiny empty files                     | stop at the `-max-files` ceiling (e.g. 1,000)      | extract all of them        |
-| Overly permissive   | entry with `0777` mode                            | mask down to `-max-mode`                           | preserve `0777`            |
+| Fixture           | Payload                             | secure-unzip must                             | system `unzip` expected to |
+|-------------------|-------------------------------------|-----------------------------------------------|----------------------------|
+| Zip Slip          | entry named `../../etc/passwd`      | abort, naming the traversal constraint        | write outside the dest dir |
+| Zip Bomb          | highly compressed zero-filled files | abort on `-max-size` or ratio breach          | expand unbounded           |
+| Inode exhaustion  | thousands of tiny empty files       | stop at the `-max-files` ceiling (e.g. 1,000) | extract all of them        |
+| Overly permissive | entry with `0777` mode              | mask down to `-max-mode`                      | preserve `0777`            |
 
 Fixtures are **generated**, not committed — a zip bomb in git is its own problem. The generator is
 part of `testutils/`.

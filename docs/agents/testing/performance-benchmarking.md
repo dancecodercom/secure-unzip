@@ -34,5 +34,8 @@ Neither tool is currently verified as installed here.
 Report path: `docs/benchmark/performance_report.md` (generated; does not exist yet). It combines
 the exported hyperfine markdown table with the resource metrics into one structured summary.
 
+Distinct from the tool's own `--verbose` statistics ([Verbose Output](../cli/verbose-output.md)):
+those are single-run, self-reported, and unwarmed. Never quote them as benchmark results.
+
 Keep it separate from `security_report.md` — different harness, different audience, different
 regeneration cadence.

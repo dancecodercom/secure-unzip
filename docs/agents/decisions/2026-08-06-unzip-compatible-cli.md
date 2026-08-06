@@ -39,6 +39,8 @@ unsafe tool. Aliasing `unzip=secure-unzip` should be a viable adoption path.
   `unzip` flag set are unresolved, so "drop-in" is currently aspirational, not tested.
 * Deferred: a compatibility test that runs a corpus of real-world `unzip` invocations against both
   binaries.
+* An escape hatch for legitimately unusual archives was left unspecified here; it was decided
+  separately on 2026-08-06 as [`--secure=no`](2026-08-06-secure-master-switch.md).
 
 # Citations
 
